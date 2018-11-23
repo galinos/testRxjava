@@ -4,6 +4,7 @@ import android.graphics.drawable.AnimationDrawable
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
+import fr.galinos.testRxjava.model.StatusResponse
 import fr.galinos.testRxjava.transformer.applyRetry
 import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
@@ -11,11 +12,10 @@ import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.rxkotlin.zipWith
 import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_rxjava.*
+import org.reactivestreams.Subscriber
 import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
-import io.reactivex.ObservableTransformer
-
 
 
 class RxjavaActivity : AppCompatActivity() {
@@ -81,6 +81,13 @@ class RxjavaActivity : AppCompatActivity() {
                     Log.d("DEBUG", "[RxjavaActivity] testObservableTransformation concatMap $s : $delay")
 
                     Observable.just("$s ConcatMap").delay(delay, TimeUnit.MILLISECONDS)
+                }
+                .doOnComplete {
+
+                    Log.d("DEBUG", "[RxjavaActivity] testObservableTransformation doOnComplete start")
+                    Observable.timer(10000, TimeUnit.MILLISECONDS)
+                    Log.d("DEBUG", "[RxjavaActivity] testObservableTransformation doOnComplete end")
+
                 }
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -393,15 +400,46 @@ class RxjavaActivity : AppCompatActivity() {
         val mDisposable = CompositeDisposable()
 
         val time = System.currentTimeMillis()
+        var inc: Int = 0
 
-        val obs = Observable.fromPublisher<String> {
-            it.onNext("Doing a network call!")
-            Thread.sleep(1000)      // Long running process
-
-            it.onError(TimeoutException()) // Some error thrown
-        }
-
-        mDisposable.add(obs.applyRetry()
+        mDisposable.add(
+                Observable.create<StatusResponse> {
+                    Log.d("DEBUG", "[RxjavaActivity] Observable.create [${System.currentTimeMillis() - time}]")
+                    inc++
+                    Thread.sleep(1000)
+                    if(inc < 3 ) {
+                        it.onNext(StatusResponse( 400,"Network Error"))
+                    }
+                    else if(inc < 4 ) {
+                        it.onError(TimeoutException())
+                    }
+                    else {
+                        it.onNext(StatusResponse( 0,"Network Ok"))
+                    }
+                }
+                .applyRetry()
+                .map {
+                    it.statusMsg = "Map this message OK"
+                    it
+                }
+                .flatMap {
+                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry flatMap [${System.currentTimeMillis() - time}]")
+                    Thread.sleep(2000)
+                    Observable.just(it).delay(2000, TimeUnit.MILLISECONDS)
+                }
+                .doOnNext {
+                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry doOnNext [${System.currentTimeMillis() - time}]")
+                    Thread.sleep(5000)
+                }
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe({
+                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry onNext it $it [${System.currentTimeMillis() - time}]")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry onError $it [${System.currentTimeMillis() - time}]")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry onComplete [${System.currentTimeMillis() - time}]")
+                })
 
                 /*.retryWhen { errors ->
 
@@ -421,36 +459,36 @@ class RxjavaActivity : AppCompatActivity() {
             }*/
 
 
-            /*
-            range 1 [13]
-            onNext it Doing a network call! [49]
-            onNext it Doing a network call! [10014]
-            range 2 [11015]
-            onNext it Doing a network call! [21016]
-            range 3 [22016]
-            onNext it Doing a network call! [32017]
-             onComplete [33019]
+                /*
+                range 1 [13]
+                onNext it Doing a network call! [49]
+                onNext it Doing a network call! [10014]
+                range 2 [11015]
+                onNext it Doing a network call! [21016]
+                range 3 [22016]
+                onNext it Doing a network call! [32017]
+                 onComplete [33019]
 
-            Observable.range(1, 3).concatMap { count ->
-                println("DEBUG testObservableRetry range $count [${System.currentTimeMillis() - time}]")
-                Observable.timer(10, TimeUnit.SECONDS)
-            }*/
+                Observable.range(1, 3).concatMap { count ->
+                    println("DEBUG testObservableRetry range $count [${System.currentTimeMillis() - time}]")
+                    Observable.timer(10, TimeUnit.SECONDS)
+                }*/
 
-            /*, {
-        if (error is TimeoutException) {
+                /*, {
+            if (error is TimeoutException) {
 
-        }
-        // For anything else, don't retry
-        else {
+            }
+            // For anything else, don't retry
+            else {
 
-        }
-        Observable.error<Throwable>(error)
-    }*/
+            }
+            Observable.error<Throwable>(error)
+        }*/
 
 
-            //
+                //
                 // For IOExceptions, we  retry
-                   // Zip error observable with a range one
+                // Zip error observable with a range one
 
                 /*
                 errors.zipWith(Observable.range(1, 3)   // Zip error observable with a range one
@@ -460,69 +498,24 @@ class RxjavaActivity : AppCompatActivity() {
                             println("DEBUG concatMap $retryCount")
                             obs.delay(3, TimeUnit.SECONDS)
                         })*/
-            //}
-        /*.retryWhen { errors ->
-            println("DEBUG retryWhen $errors")
+                //}
+                /*.retryWhen { errors ->
+                    println("DEBUG retryWhen $errors")
 
-            if(errors is IOException) {
-                errors.zipWith(Observable.range(1, 3)   // Zip error observable with a range one
-                        .concatMap { retryCount ->
+                    if(errors is IOException) {
+                        errors.zipWith(Observable.range(1, 3)   // Zip error observable with a range one
+                                .concatMap { retryCount ->
 
-                            println("DEBUG concatMap $retryCount")
+                                    println("DEBUG concatMap $retryCount")
 
-                            Observable.timer(3, TimeUnit.SECONDS)
-                        })
-            }
-            else {
-                Observable.timer(3, TimeUnit.SECONDS)
-            }
-        }*/
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe({
-                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry onNext it $it [${System.currentTimeMillis() - time}]")
-                }, {
-                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry onError $it [${System.currentTimeMillis() - time}]")
-                }, {
-                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry onComplete [${System.currentTimeMillis() - time}]")
-                })
+                                    Observable.timer(3, TimeUnit.SECONDS)
+                                })
+                    }
+                    else {
+                        Observable.timer(3, TimeUnit.SECONDS)
+                    }
+                }*/
         )
 
     }
-
-    /*
-    fun <T> Observable<T>.applyRetry(): Observable<T> {
-        return retryWhen{ errors ->
-            errors.zipWith(Observable.range(1, 3)) { error, count -> error }.flatMap { throwable ->
-                println("DEBUG testObservableRetry flatMap $throwable")
-                if (throwable is TimeoutException) {
-                    Observable.timer(1, TimeUnit.SECONDS)
-                }
-                // For anything else, don't retry
-                else {
-                    Observable.error<Throwable>(throwable)
-                }
-            }
-        }
-    }*/
-
-
-    fun <T> Observable<T>.applySchedulers(): Observable<T> {
-        return subscribeOn(Schedulers.computation()).observeOn(AndroidSchedulers.mainThread())
-    }
-
-    // custom transformer
-    fun <T> Observable<T>.applySchedulers(transformer: ThreadTransformer): Observable<T> {
-        return compose(transformer.applySchedulers<T>())
-    }
-
-    /*override fun call(): Observable<MyType> {
-        return Observable.just(getData()).applySchedulers()
-    }*/
-
-    interface ThreadTransformer {
-        fun <T> applySchedulers(): ObservableTransformer<T, T>
-
-    }
-
 }
