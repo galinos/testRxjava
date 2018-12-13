@@ -415,6 +415,7 @@ class RxjavaActivity : AppCompatActivity() {
                     }
                     else {
                         it.onNext(StatusResponse( 0,"Network Ok"))
+                        it.onComplete()
                     }
                 }
                 .applyRetry()
@@ -429,7 +430,8 @@ class RxjavaActivity : AppCompatActivity() {
                 }
                 .doOnNext {
                     Log.d("DEBUG", "[RxjavaActivity] testObservableRetry doOnNext [${System.currentTimeMillis() - time}]")
-                    Thread.sleep(5000)
+                    //Thread.sleep(5000)
+                    Observable.just(it).delay(5000, TimeUnit.MILLISECONDS)
                 }
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
