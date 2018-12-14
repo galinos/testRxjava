@@ -6,7 +6,9 @@ import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import fr.galinos.testRxjava.model.StatusResponse
 import fr.galinos.testRxjava.transformer.applyRetry
+import io.reactivex.Flowable
 import io.reactivex.Observable
+import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.rxkotlin.zipWith
@@ -37,8 +39,11 @@ class RxjavaActivity : AppCompatActivity() {
         //testObservable()
         //testObservableZip()
         //testObservableSwitchOnNext()
-        testObservableRetry()
+        //testObservableRetry()
         //testObservableTransformation()
+        //testFlowable()
+        //testMergeSingle()
+        testZipSingle()
     }
 
     override fun onDestroy() {
@@ -51,6 +56,77 @@ class RxjavaActivity : AppCompatActivity() {
         frameAnimation = loaderView.background as AnimationDrawable
         frameAnimation.start()
     }
+
+    private fun testZipSingle() {
+        Log.d("DEBUG", "[RxjavaActivity] testZipSingle")
+        var single1 = Single.create<Int> {
+            Thread.sleep(2000)
+            it.onSuccess(100)
+            //it.onError(Throwable())
+        }
+
+        var single2 = Single.create<Int> {
+            Thread.sleep(2000)
+            it.onSuccess(200)
+        }
+        single1.toObservable().zipWith(single2.toObservable()).subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe({
+                    Log.d("DEBUG", "[RxjavaActivity] testZipSingle onNext it : $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testZipSingle onError $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testZipSingle onComplete")
+                })
+    }
+
+    private fun testMergeSingle() {
+        Log.d("DEBUG", "[RxjavaActivity] testMergeSingle")
+        var single1 = Single.create<Int> {
+            Thread.sleep(2000)
+            //it.onSuccess(100)
+            it.onError(Throwable())
+        }
+
+        var single2 = Single.create<Int> {
+            Thread.sleep(2000)
+            it.onSuccess(200)
+        }
+
+        Observable.mergeDelayError(single1.toObservable(), single2.toObservable()).subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe({
+                    Log.d("DEBUG", "[RxjavaActivity] testMergeSingle onNext it : $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testMergeSingle onError $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testMergeSingle onComplete")
+                })
+
+    }
+
+    private fun testFlowable() {
+        Log.d("DEBUG", "[RxjavaActivity] testFlowable")
+        val list = ArrayList(Arrays.asList("1", "2", "3", "4", "5", "6", "7", "8"))
+
+        Flowable.just(list).flatMap {results ->
+            Flowable.fromIterable(results)
+        }.map {
+
+            Thread.sleep(1000)
+            "----> $it <----"
+        }
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe({
+                    Log.d("DEBUG", "[RxjavaActivity] testFlowable list onNext it : $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testFlowable list onError")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testFlowable list onComplete")
+                })
+    }
+
 
     private fun testObservableTransformation() {
         val mDisposable = CompositeDisposable()
