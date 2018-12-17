@@ -11,6 +11,7 @@ import io.reactivex.Observable
 import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.rxkotlin.toSingle
 import io.reactivex.rxkotlin.zipWith
 import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_rxjava.*
@@ -43,7 +44,8 @@ class RxjavaActivity : AppCompatActivity() {
         //testObservableTransformation()
         //testFlowable()
         //testMergeSingle()
-        testZipSingle()
+        //testZipSingle()
+        testMixedObservable()
     }
 
     override fun onDestroy() {
@@ -55,6 +57,38 @@ class RxjavaActivity : AppCompatActivity() {
         loaderView.setBackgroundResource(R.drawable.loader_animation)
         frameAnimation = loaderView.background as AnimationDrawable
         frameAnimation.start()
+    }
+
+    private fun testMixedObservable() {
+        Log.d("DEBUG", "[RxjavaActivity] testMixedObservable")
+        var single = Single.create<Int> {
+            Thread.sleep(2000)
+            it.onSuccess(100)
+            //it.onError(Throwable())
+        }
+
+        var observable = Observable.create<String> { emitter ->
+            Thread.sleep(1000)
+            emitter.onNext("testMixedObservable observable")
+
+            Thread.sleep(1000)
+            emitter.onComplete()
+        }
+
+
+        single.toObservable().flatMap {
+
+            Observable.just(it)
+
+        }.subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe({
+                    Log.d("DEBUG", "[RxjavaActivity] testMixedObservable onNext it : $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testMixedObservable onError $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testMixedObservable onComplete")
+                })
     }
 
     private fun testZipSingle() {
