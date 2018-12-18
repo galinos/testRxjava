@@ -6,16 +6,16 @@ import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import fr.galinos.testRxjava.model.StatusResponse
 import fr.galinos.testRxjava.transformer.applyRetry
-import io.reactivex.Flowable
+import io.reactivex.*
 import io.reactivex.Observable
-import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.rxkotlin.toSingle
+import io.reactivex.functions.*
+import io.reactivex.rxkotlin.subscribeBy
 import io.reactivex.rxkotlin.zipWith
 import io.reactivex.schedulers.Schedulers
+import io.reactivex.subjects.PublishSubject
 import kotlinx.android.synthetic.main.activity_rxjava.*
-import org.reactivestreams.Subscriber
 import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -30,7 +30,7 @@ class RxjavaActivity : AppCompatActivity() {
         animateLoader()
 
         //testObservableJust()
-        //testObservableFrom()
+        //testObservableFromArray()
         //testObservableFromIterable()
         //testObservableCreate()
         //testObservableDefer()
@@ -38,14 +38,19 @@ class RxjavaActivity : AppCompatActivity() {
         //testObservableInterval()
         //testObservableTimer()
         //testObservable()
-        //testObservableZip()
+        //testObservableZipWith()
         //testObservableSwitchOnNext()
         //testObservableRetry()
         //testObservableTransformation()
         //testFlowable()
-        //testMergeSingle()
+        //testMergeDelayError()
+        //testConcat()
+        //testCombineLatestDelayError()
         //testZipSingle()
-        testMixedObservable()
+        //testMixedObservable()
+        //testObservableZip()
+        //testCallableAndAction()
+        testDelay()
     }
 
     override fun onDestroy() {
@@ -59,9 +64,105 @@ class RxjavaActivity : AppCompatActivity() {
         frameAnimation.start()
     }
 
+    private fun testDelay() {
+        Log.d("DEBUG", "[RxjavaActivity] testDelay")
+        Observable.just("TEST").map {
+            Log.d("DEBUG", "[RxjavaActivity] testDelay map $it")
+            it
+        }.delay(2000, TimeUnit.MILLISECONDS).subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe({
+                    Log.d("DEBUG", "[RxjavaActivity] testDelay onNext $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testDelay onError $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testDelay onComplete")
+                })
+    }
+
+
+    private fun testCallableAndAction() {
+        Log.d("DEBUG", "[RxjavaActivity] testCallableAndAction")
+
+        val singleCall = Single.fromCallable { Thread.sleep(2000) }.map { true }
+
+        val completableAction = Completable.fromAction { Thread.sleep(2000) }
+
+        val completableCallable = Completable.fromCallable { Thread.sleep(2000) }
+
+        singleCall.subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe({
+                    Log.d("DEBUG", "[RxjavaActivity] testCallableAndAction onComplete $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testCallableAndAction onError $it")
+                })
+
+    }
+
+    private fun testObservableZip() {
+        Log.d("DEBUG", "[RxjavaActivity] testObservableZip")
+
+        val observable1 = Observable.create<String> { emitter ->
+            Thread.sleep(3000)
+            emitter.onNext("observable1")
+
+            emitter.onComplete()
+        }
+
+        val observable2 = Observable.create<String> { emitter ->
+            Thread.sleep(3000)
+            emitter.onNext("observable2")
+
+            emitter.onComplete()
+        }
+
+        val observable3 = Observable.create<String> { emitter ->
+            Thread.sleep(4000)
+            emitter.onNext("observable3")
+
+            emitter.onComplete()
+        }
+
+        val single = Single.create<String> {
+            Thread.sleep(3000)
+            it.onSuccess("single")
+        }
+
+        val completable = Completable.fromAction { Thread.sleep(5000) }
+
+        Observable.zip(single.map {
+            Log.d("DEBUG", "[RxjavaActivity] testObservableZip single map $it")
+            it
+        }.toObservable().subscribeOn(Schedulers.io()),
+                completable.andThen(Observable.just(true)).subscribeOn(Schedulers.io()),
+                observable2.flatMap {
+                    Log.d("DEBUG", "[RxjavaActivity] testObservableZip observable2 flatMap $it")
+                    Thread.sleep(4000)
+                    Observable.just(it)
+                }.subscribeOn(Schedulers.io()), observable3, Function4<String, Boolean, String, String, String>
+                { sing, comp, obs2 , obs3 ->
+                    convert(sing, comp, obs2, obs3)
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe({
+                    Log.d("DEBUG", "[RxjavaActivity] testObservableZip onNext $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testObservableZip onError $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testObservableZip onComplete")
+                })
+    }
+
+    private fun convert(sing: String, comp: Boolean, obs2: String, obs3: String): String {
+        Log.d("DEBUG", "[RxjavaActivity] testObservableZip zip : $sing - $comp - $obs2 - $obs3")
+        return "--> $sing - $comp - $obs2 - $obs3"
+    }
+
     private fun testMixedObservable() {
         Log.d("DEBUG", "[RxjavaActivity] testMixedObservable")
-        var single = Single.create<Int> {
+        val single = Single.create<Int> {
             Thread.sleep(2000)
             it.onSuccess(100)
             //it.onError(Throwable())
@@ -80,8 +181,7 @@ class RxjavaActivity : AppCompatActivity() {
 
             Observable.just(it)
 
-        }.subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+        }.subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
                 .subscribe({
                     Log.d("DEBUG", "[RxjavaActivity] testMixedObservable onNext it : $it")
                 }, {
@@ -103,8 +203,7 @@ class RxjavaActivity : AppCompatActivity() {
             Thread.sleep(2000)
             it.onSuccess(200)
         }
-        single1.toObservable().zipWith(single2.toObservable()).subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+        single1.toObservable().zipWith(single2.toObservable()).subscribeOn(Schedulers.io()).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
                 .subscribe({
                     Log.d("DEBUG", "[RxjavaActivity] testZipSingle onNext it : $it")
                 }, {
@@ -114,42 +213,163 @@ class RxjavaActivity : AppCompatActivity() {
                 })
     }
 
-    private fun testMergeSingle() {
-        Log.d("DEBUG", "[RxjavaActivity] testMergeSingle")
-        var single1 = Single.create<Int> {
+    private fun testMergeDelayError() {
+        Log.d("DEBUG", "[RxjavaActivity] testMergeDelayError")
+        val single1 = Single.create<Int> {
             Thread.sleep(2000)
-            //it.onSuccess(100)
-            it.onError(Throwable())
+            it.onSuccess(2000)
+            //it.onError(Throwable())
         }
 
-        var single2 = Single.create<Int> {
-            Thread.sleep(2000)
-            it.onSuccess(200)
+        val single2 = Single.create<Int> {
+            Thread.sleep(4000)
+            it.onSuccess(4000)
         }
 
-        Observable.mergeDelayError(single1.toObservable(), single2.toObservable()).subscribeOn(Schedulers.io())
+        val single3 = Single.create<Int> {
+            Thread.sleep(3000)
+            it.onSuccess(3000)
+        }
+
+        Observable.mergeDelayError(single1.toObservable().subscribeOn(Schedulers.io()), single2.toObservable().subscribeOn(Schedulers.io()), single3.toObservable()).subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe({
-                    Log.d("DEBUG", "[RxjavaActivity] testMergeSingle onNext it : $it")
+                    Log.d("DEBUG", "[RxjavaActivity] testMergeDelayError onNext it : $it")
                 }, {
-                    Log.d("DEBUG", "[RxjavaActivity] testMergeSingle onError $it")
+                    Log.d("DEBUG", "[RxjavaActivity] testMergeDelayError onError $it")
                 }, {
-                    Log.d("DEBUG", "[RxjavaActivity] testMergeSingle onComplete")
+                    Log.d("DEBUG", "[RxjavaActivity] testMergeDelayError onComplete")
                 })
 
     }
 
+    private fun testConcat() {
+        Log.d("DEBUG", "[RxjavaActivity] testConcat")
+        val single1 = Single.create<Int> {
+            Log.d("DEBUG", "[RxjavaActivity] testConcat single1")
+            Thread.sleep(2000)
+            it.onSuccess(2000)
+            //it.onError(Throwable())
+        }
+
+        val single2 = Single.create<Int> {
+            Log.d("DEBUG", "[RxjavaActivity] testConcat single2")
+            Thread.sleep(4000)
+            it.onSuccess(4000)
+        }
+
+        val single3 = Single.create<String> {
+            Log.d("DEBUG", "[RxjavaActivity] testConcat single3")
+            Thread.sleep(3000)
+            it.onSuccess("3000")
+        }
+
+        val maybe = Maybe.create<String> {
+            Log.d("DEBUG", "[RxjavaActivity] testConcat maybe")
+            Thread.sleep(1000)
+            it.onSuccess("1000")
+        }
+
+        val list = ArrayList(Arrays.asList("1", "2", "3", "4", "5", "6", "7", "8"))
+        val flowable = Flowable.create<List<String>> ({
+            Log.d("DEBUG", "[RxjavaActivity] testConcat flowable")
+            Thread.sleep(2000)
+
+            it.onNext(list)
+
+            it.onComplete()
+
+
+        }, BackpressureStrategy.BUFFER
+        )
+
+        Observable.just(9999).flatMap {
+            Log.d("DEBUG", "[RxjavaActivity] testConcat flatMap it : $it")
+
+            Observable.concat<Any>(single1.toObservable(), maybe.toObservable(), flowable.toObservable(), single2.toObservable())
+        }.subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe({
+            Log.d("DEBUG", "[RxjavaActivity] testConcat onNext it : $it")
+        }, {
+            Log.d("DEBUG", "[RxjavaActivity] testConcat onError $it")
+        }, {
+            Log.d("DEBUG", "[RxjavaActivity] testConcat onComplete")
+        })
+    }
+
+    private fun testCombineLatestDelayError() {
+        Log.d("DEBUG", "[RxjavaActivity] testCombineLatestDelayError")
+        val single1 = Single.create<Int> {
+            Thread.sleep(2000)
+            it.onSuccess(2000)
+            //it.onError(Throwable())
+        }
+
+        val single2 = Single.create<Int> {
+            Thread.sleep(4000)
+            it.onSuccess(4000)
+        }
+
+        val single3 = Single.create<String> {
+            Thread.sleep(3000)
+            it.onSuccess("3000")
+        }
+
+        Observable.combineLatestDelayError(Arrays.asList(single1.toObservable(), single2.toObservable(), single3.toObservable())) { result ->
+            Log.d("DEBUG", "[RxjavaActivity] testCombineLatestDelayError combine : $result")
+        }.subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe({
+                    Log.d("DEBUG", "[RxjavaActivity] testCombineLatestDelayError onNext it : $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testCombineLatestDelayError onError $it")
+                }, {
+                    Log.d("DEBUG", "[RxjavaActivity] testCombineLatestDelayError onComplete")
+                })
+    }
+
     private fun testFlowable() {
         Log.d("DEBUG", "[RxjavaActivity] testFlowable")
-        val list = ArrayList(Arrays.asList("1", "2", "3", "4", "5", "6", "7", "8"))
+        //val list = ArrayList(Arrays.asList("1", "2", "3", "4", "5", "6", "7", "8"))
+        val list = ArrayList<String>()
 
-        Flowable.just(list).flatMap {results ->
+        /*.flatMap { results ->
             Flowable.fromIterable(results)
         }.map {
 
             Thread.sleep(1000)
             "----> $it <----"
+        }*/
+
+        /*val observable = PublishSubject.create<Int>()
+        observable.observeOn(Schedulers.computation())
+                .subscribeBy (
+                        onNext ={
+                            println("number: ${it}")
+                        },onError = {t->
+                    print(t.message)
+                }
+                )
+        for (i in 0..1000000){
+            observable.onNext(i)
+        }*/
+
+        val observable = PublishSubject.create<Int>()
+        observable
+                .toFlowable(BackpressureStrategy.MISSING)
+                .observeOn(Schedulers.computation())
+                .subscribeBy (
+                        onNext ={
+                            println("number: ${it}")
+                        },onError = {t->
+                    print("error : " + t.message)
+                }
+                )
+        for (i in 0..1000000){
+            observable.onNext(i)
         }
+
+/*
+        Flowable.just(list)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe({
@@ -158,7 +378,7 @@ class RxjavaActivity : AppCompatActivity() {
                     Log.d("DEBUG", "[RxjavaActivity] testFlowable list onError")
                 }, {
                     Log.d("DEBUG", "[RxjavaActivity] testFlowable list onComplete")
-                })
+                })*/
     }
 
 
@@ -261,7 +481,7 @@ class RxjavaActivity : AppCompatActivity() {
     onNext it : [1, 2, 3, 4, 5, 6, 7, 8]
     onComplete
      */
-    private fun testObservableFrom() {
+    private fun testObservableFromArray() {
         val mDisposable = CompositeDisposable()
 
         val list = ArrayList(Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8))
@@ -458,7 +678,7 @@ class RxjavaActivity : AppCompatActivity() {
         )
     }
 
-    private fun testObservableZip() {
+    private fun testObservableZipWith() {
         val mDisposable = CompositeDisposable()
 
         val firstNames = Observable.just("James", "Jean-Luc", "Benjamin")
@@ -517,41 +737,39 @@ class RxjavaActivity : AppCompatActivity() {
                     Log.d("DEBUG", "[RxjavaActivity] Observable.create [${System.currentTimeMillis() - time}]")
                     inc++
                     Thread.sleep(1000)
-                    if(inc < 3 ) {
-                        it.onNext(StatusResponse( 400,"Network Error"))
-                    }
-                    else if(inc < 4 ) {
+                    if (inc < 3) {
+                        it.onNext(StatusResponse(400, "Network Error"))
+                    } else if (inc < 4) {
                         it.onError(TimeoutException())
-                    }
-                    else {
-                        it.onNext(StatusResponse( 0,"Network Ok"))
+                    } else {
+                        it.onNext(StatusResponse(0, "Network Ok"))
                         it.onComplete()
                     }
                 }
-                .applyRetry()
-                .map {
-                    it.statusMsg = "Map this message OK"
-                    it
-                }
-                .flatMap {
-                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry flatMap [${System.currentTimeMillis() - time}]")
-                    Thread.sleep(2000)
-                    Observable.just(it).delay(2000, TimeUnit.MILLISECONDS)
-                }
-                .doOnNext {
-                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry doOnNext [${System.currentTimeMillis() - time}]")
-                    //Thread.sleep(5000)
-                    Observable.just(it).delay(5000, TimeUnit.MILLISECONDS)
-                }
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe({
-                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry onNext it $it [${System.currentTimeMillis() - time}]")
-                }, {
-                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry onError $it [${System.currentTimeMillis() - time}]")
-                }, {
-                    Log.d("DEBUG", "[RxjavaActivity] testObservableRetry onComplete [${System.currentTimeMillis() - time}]")
-                })
+                        .applyRetry()
+                        .map {
+                            it.statusMsg = "Map this message OK"
+                            it
+                        }
+                        .flatMap {
+                            Log.d("DEBUG", "[RxjavaActivity] testObservableRetry flatMap [${System.currentTimeMillis() - time}]")
+                            Thread.sleep(2000)
+                            Observable.just(it).delay(2000, TimeUnit.MILLISECONDS)
+                        }
+                        .doOnNext {
+                            Log.d("DEBUG", "[RxjavaActivity] testObservableRetry doOnNext [${System.currentTimeMillis() - time}]")
+                            //Thread.sleep(5000)
+                            Observable.just(it).delay(5000, TimeUnit.MILLISECONDS)
+                        }
+                        .subscribeOn(Schedulers.io())
+                        .observeOn(AndroidSchedulers.mainThread())
+                        .subscribe({
+                            Log.d("DEBUG", "[RxjavaActivity] testObservableRetry onNext it $it [${System.currentTimeMillis() - time}]")
+                        }, {
+                            Log.d("DEBUG", "[RxjavaActivity] testObservableRetry onError $it [${System.currentTimeMillis() - time}]")
+                        }, {
+                            Log.d("DEBUG", "[RxjavaActivity] testObservableRetry onComplete [${System.currentTimeMillis() - time}]")
+                        })
 
                 /*.retryWhen { errors ->
 
