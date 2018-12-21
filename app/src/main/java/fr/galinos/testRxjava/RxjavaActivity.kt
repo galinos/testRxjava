@@ -43,14 +43,15 @@ class RxjavaActivity : AppCompatActivity() {
         //testObservableRetry()
         //testObservableTransformation()
         //testFlowable()
+        //testMaybe()
         //testMergeDelayError()
-        //testConcat()
+        testConcat()
         //testCombineLatestDelayError()
         //testZipSingle()
         //testMixedObservable()
         //testObservableZip()
         //testCallableAndAction()
-        testDelay()
+        //testDelay()
     }
 
     override fun onDestroy() {
@@ -62,6 +63,30 @@ class RxjavaActivity : AppCompatActivity() {
         loaderView.setBackgroundResource(R.drawable.loader_animation)
         frameAnimation = loaderView.background as AnimationDrawable
         frameAnimation.start()
+    }
+
+    private fun testMaybe() {
+        Log.d("DEBUG", "[RxjavaActivity] testMaybe")
+
+        val maybe = Maybe.create<String> {
+            Thread.sleep(1000)
+            //it.onSuccess("maybe success")
+
+            it.onComplete()
+        }
+
+        maybe.map {
+            Log.d("DEBUG", "[RxjavaActivity] testMaybe map it : $it")
+        }.flatMap {
+            Log.d("DEBUG", "[RxjavaActivity] testMaybe flatMap it : $it")
+            Maybe.just(it)
+        }.subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe({
+            Log.d("DEBUG", "[RxjavaActivity] testMaybe onNext it : $it")
+        }, {
+            Log.d("DEBUG", "[RxjavaActivity] testMaybe onError $it")
+        }, {
+            Log.d("DEBUG", "[RxjavaActivity] testMaybe onComplete")
+        })
     }
 
     private fun testDelay() {
@@ -245,11 +270,12 @@ class RxjavaActivity : AppCompatActivity() {
 
     private fun testConcat() {
         Log.d("DEBUG", "[RxjavaActivity] testConcat")
+        // concatArrayDelayError : continue qd une erreur est soulevé et renvoie onError à la fin du traitement et pas onComplete
         val single1 = Single.create<Int> {
             Log.d("DEBUG", "[RxjavaActivity] testConcat single1")
             Thread.sleep(2000)
-            it.onSuccess(2000)
-            //it.onError(Throwable())
+            //it.onSuccess(2000)
+            it.onError(Throwable())
         }
 
         val single2 = Single.create<Int> {
@@ -286,8 +312,30 @@ class RxjavaActivity : AppCompatActivity() {
         Observable.just(9999).flatMap {
             Log.d("DEBUG", "[RxjavaActivity] testConcat flatMap it : $it")
 
-            Observable.concat<Any>(single1.toObservable(), maybe.toObservable(), flowable.toObservable(), single2.toObservable())
-        }.subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe({
+            Observable.concatArrayDelayError<Any>(single1.toObservable(), maybe.toObservable(), flowable.toObservable(), single2.toObservable())
+        }.doFinally {
+            Log.d("DEBUG", "[RxjavaActivity] testConcat doFinally")
+
+
+        }.doAfterTerminate {
+            Log.d("DEBUG", "[RxjavaActivity] testConcat doAfterTerminate")
+            /*Observable.create<Boolean> {
+                Log.d("DEBUG", "[RxjavaActivity] testConcat doAfterTerminate Observable")
+
+                it.onNext(true)
+                Thread.sleep(5000)
+                Log.d("DEBUG", "[RxjavaActivity] testConcat doAfterTerminate Observable end")
+                it.onComplete()
+
+            }.subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe({
+                Log.d("DEBUG", "[RxjavaActivity] testConcat doAfterTerminate onNext it : $it")
+            }, {
+                Log.d("DEBUG", "[RxjavaActivity] testConcat doAfterTerminate onError $it")
+            }, {
+                Log.d("DEBUG", "[RxjavaActivity] testConcat doAfterTerminate onComplete")
+            })*/
+
+        }  .subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe({
             Log.d("DEBUG", "[RxjavaActivity] testConcat onNext it : $it")
         }, {
             Log.d("DEBUG", "[RxjavaActivity] testConcat onError $it")
